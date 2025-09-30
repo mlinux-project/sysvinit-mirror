@@ -1,3 +1,5 @@
+    * Clean up of inittab manual page by Bjarni Ingi Gislason.
+
 sysvinit (3.15) released; urgency=low
 
     * Patched manual page for runlevel command. This cleans up formatting and whitespace.

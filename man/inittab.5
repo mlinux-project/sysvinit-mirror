@@ -27,7 +27,8 @@ process
 .\"{{{  Description
 .SH DESCRIPTION
 The \fBinittab\fP file describes which processes are started at bootup and
-during normal operation (e.g.\& /etc/init.d/boot, /etc/init.d/rc, gettys...).
+during normal operation
+(e.g.\& /etc/init.d/boot, /etc/init.d/rc, gettys...).
 .BR init (8)
 distinguishes multiple \fIrunlevels\fP, each of which can have its own set of
 processes that are started.  Valid runlevels are \fB0\fP\-\fB6\fP plus
@@ -40,15 +41,17 @@ processes that are started.  Valid runlevels are \fB0\fP\-\fB6\fP plus
 .RE
 Lines beginning with `#' are ignored.
 .\"{{{  id
-.IP \fIid\fP
-is a unique sequence of 1-4 characters which identifies an entry in
-.B inittab 
-(for versions of sysvinit compiled with the \fIold\fP libc5 (< 5.2.18) or
-a.out libraries the limit is 2 characters).
+.IP \fIid\fP 8n\" indent 8n added for tag 'process'
+is a unique sequence of 1\(en4 characters which identifies an entry in
+.B inittab
+(for versions of sysvinit compiled with the \fIold\fP libc5
+(< 5.2.18)
+or a.out libraries the limit is 2 characters).
 .sp
 Note: traditionally, for getty and other login processes, the value of the
 \fIid\fP field is kept the same as the suffix of the corresponding tty, e.g.\&
-\fB1\fP for \fBtty1\fP. Some ancient login accounting programs might
+\fB1\fP for \fBtty1\fP.
+Some ancient login accounting programs might
 expect this, though I can't think of any.
 .\"}}}
 .\"{{{  runlevels
@@ -105,13 +108,14 @@ then with \s-2SIGKILL\s0.
 .PP
 Valid actions for the \fIaction\fP field are:
 .\"{{{  respawn
-.IP \fBrespawn\fP
-The process will be restarted whenever it terminates (e.g.\& getty).
+.IP \fBrespawn\fP 13n\" indent 13n added for 'powerfailnow'
+The process will be restarted whenever it terminates
+(e.g.\& getty).
 .\"}}}
 .\"{{{  wait
 .IP \fBwait\fP
-The process will be started once when the specified runlevel is entered and 
-.B init 
+The process will be started once when the specified runlevel is entered and
+.B init
 will wait for its termination.
 .\"}}}
 .\"{{{  once
@@ -126,9 +130,10 @@ field is ignored.
 .\"}}}
 .\"{{{  bootwait
 .IP \fBbootwait\fP
-The process will be executed during system boot, while 
-.B init 
-waits for its termination (e.g.\& /etc/rc).  
+The process will be executed during system boot, while
+.B init
+waits for its termination
+(e.g.\& /etc/rc).
 The \fIrunlevels\fP field is ignored.
 .\"}}}
 .\"{{{  off
@@ -145,19 +150,22 @@ and `c').
 .\"{{{  initdefault
 .IP \fBinitdefault\fP
 An \fBinitdefault\fP entry specifies the runlevel which should be
-entered after system boot.  If none exists, 
+entered after system boot.  If none exists,
 .B init
-will ask for a runlevel on the console. The \fIprocess\fP field is ignored.
+will ask for a runlevel on the console.
+The \fIprocess\fP field is ignored.
 .\"}}}
 .\"{{{  sysinit
 .IP \fBsysinit\fP
-The process will be executed during system boot. It will be
+The process will be executed during system boot.
+It will be
 executed before any \fBboot\fP or \fB bootwait\fP entries.
 The \fIrunlevels\fP field is ignored.
 .\"}}}
 .\"{{{  powerwait
 .IP \fBpowerwait\fP
-The process will be executed when the power goes down. \fBinit\fR is usually
+The process will be executed when the power goes down.
+\fBinit\fR is usually
 informed about this by a process talking to a UPS connected to the computer.
 \fBinit\fP will wait for the process to finish before continuing.
 .\"}}}
@@ -181,7 +189,8 @@ external UPS and the monitoring process are able to detect this condition).
 .IP \fBctrlaltdel\fP
 The process will be executed when \fBinit\fP receives the \fBSIGINT\fP signal.
 This means that someone on the system console has pressed the
-\fBCTRL\-ALT\-DEL\fP key combination. Typically one wants to execute some
+\fBCTRL\-ALT\-DEL\fP key combination.
+Typically one wants to execute some
 sort of \fBshutdown\fP either to get into single\-user level or to
 reboot the machine.
 .\"}}}
@@ -192,9 +201,11 @@ keyboard handler that a special key combination was pressed on the
 console keyboard.
 .sp
 The documentation for this function is not complete yet; more documentation
-can be found in the kbd-x.xx packages (most recent was kbd-0.94 at
-the time of this writing). Basically you want to map some keyboard
-combination to the "KeyboardSignal" action. For example, to map Alt-Uparrow
+can be found in the kbd-x.xx packages
+(most recent was kbd-0.94 at the time of this writing).
+Basically you want to map some keyboard
+combination to the "KeyboardSignal" action.
+For example, to map Alt-Uparrow
 for this purpose use the following in your keymaps file:
 .RS
 .sp
@@ -243,7 +254,7 @@ si::sysinit:/etc/init.d/rcS
 #
 # Runlevel 0 is halt.
 # Runlevel 1 is single-user.
-# Runlevels 2-5 are multi-user.
+# Runlevels 2\(en5 are multi-user.
 # Runlevel 6 is reboot.
 
 l0:0:wait:/etc/init.d/rc 0
@@ -255,7 +266,7 @@ l5:5:wait:/etc/init.d/rc 5
 l6:6:wait:/etc/init.d/rc 6
 
 # What to do at the "3 finger salute".
-ca::ctrlaltdel:/sbin/shutdown -t1 -h now
+ca::ctrlaltdel:/sbin/shutdown \-t1 \-h now
 
 # Runlevel 2,3: getty on virtual consoles
 # Runlevel   3: getty on terminal (ttyS0) and modem (ttyS1)
@@ -263,8 +274,8 @@ ca::ctrlaltdel:/sbin/shutdown -t1 -h now
 2:23:respawn:/sbin/getty tty2 VC linux
 3:23:respawn:/sbin/getty tty3 VC linux
 4:23:respawn:/sbin/getty tty4 VC linux
-S0:3:respawn:/sbin/getty -L 9600 ttyS0 vt320
-S1:3:respawn:/sbin/mgetty -x0 -D ttyS1
+S0:3:respawn:/sbin/getty \-L 9600 ttyS0 vt320
+S1:3:respawn:/sbin/mgetty \-x0 \-D ttyS1
 
 .fi
 .sp
@@ -284,13 +295,13 @@ This manual page was written by
 .MT lederer@\:francium\:.informatik\:.uni-bonn\:.de
 Sebastian Lederer
 .ME
-and modified by 
+and modified by
 .MT u31b3hs@\:pool\:.informatik\:.rwth-aachen\:.de
 Michael Haardt
 .ME .
 .\"}}}
 .\"{{{  See also
-.SH "SEE ALSO"
+.SH SEE ALSO
 .BR init (8),
 .BR telinit (8)
 .\"}}}
