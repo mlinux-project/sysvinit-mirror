@@ -322,6 +322,7 @@ write_init ()
       pidfile="/var/run/$name-sysd2v.pid"
   fi
 
+  dbus_wait=
   if [ "$service_type" = notify ]
   then
     start_args="$start_args --notify-await"
@@ -333,7 +334,33 @@ write_init ()
       echo "WARNING: unsupported timeout '$timeout'" >&2
   elif [ "$service_type" = dbus ]
   then
-    : TODO
+    timeout=${ini_service_timeoutstartsec:-$ini_service_timeoutsec}
+    timeout=${timeout%s}
+
+    case $timeout in
+      '') timeout=60;;
+      *[!0-9]*)
+        echo "WARNING: unsupported timeout '$timeout'" >&2
+        timeout=60
+        ;;
+    esac
+
+    if [ -z "$ini_service_busname" ]
+    then
+      echo "WARNING: Type=dbus requires BusName" >&2
+    else
+      dbus_wait=$(printf '%s%s' "$nl" "if command -v dbus-send >/dev/null 2>&1; then \
+__dbus_wait_i=0; \
+while [ \$__dbus_wait_i -lt $timeout ]; do \
+dbus-send --system --dest=org.freedesktop.DBus --type=method_call \
+--print-reply /org/freedesktop/DBus org.freedesktop.DBus.NameHasOwner \
+string:\"$ini_service_busname\" 2>/dev/null | grep -q 'boolean true' && break; \
+__dbus_wait_i=\$((\$__dbus_wait_i + 1)); sleep 1; done; \
+[ \$__dbus_wait_i -lt $timeout ]; \
+else \
+echo \"WARNING: dbus-send not found, skipping BusName check for $ini_service_busname\" >&2; \
+fi")
+    fi
   fi
 
   signal=${ini_service_killsignal#SIG}
@@ -375,6 +402,8 @@ write_init ()
     # TODO: test if already running before start (pretest="+do_status_cmd")
     [ -n "$need_do_start" -o -z "$errcheck" ] &&
       execstart="-+do_start_cmd$errcheck"
+    [ -n "$dbus_wait" -a -z "$execstart" ] &&
+      execstart="-+do_start_cmd$errcheck"
 
     errcheck=' || return $?'
     [ -n "$execstop" ] && errcheck=
@@ -393,7 +422,7 @@ write_init ()
     runstart=$run
   fi
 
-  need_do_start=$need_do_start$execstart
+  need_do_start=$need_do_start$execstart$dbus_wait
   start_args=${start_args# }
   stop_args=${stop_args# }
 
@@ -483,6 +512,7 @@ EOF
       write_commands "$chdir"
       write_commands "$ini_service_execstartpre" "$run" "$runpriv"
       write_commands "$execstart" "$runstart" "$runprivstart"
+      write_commands "$dbus_wait"
       write_commands "$ini_service_execstartpost" "$run" "$runpriv"
     } | write_function start_cmd
   else
@@ -548,4 +578,3 @@ shift $(($OPTIND - 1))
 # convert unit file
 read_unit "${1:--}" "$instance"
 write_init "${name-$inifile_unit_name}" "$instance"
-

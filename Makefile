@@ -6,6 +6,9 @@ all install clean distclean:
 	$(MAKE) VERSION=$(VERSION) -C man $@
 	$(MAKE) VERSION=$(VERSION) -C src $@
 
+check:
+	./contrib/tests/sysd2v-dbus-regression.sh
+
 GITLOGIN=$(shell git remote -v | head -n 1 | cut -f 1 -d '@' | sed 's/origin\t//g')
 override TMP:=$(shell mktemp -du $(VERSION).XXXXXXXX)
 override TARBALL:=$(TMP)/$(PACKAGE)-$(VERSION).tar.xz
@@ -43,4 +46,3 @@ $(TMP)/$(PACKAGE)-$(VERSION): distclean
 	@cp -R $(SOURCES) $(TMP)/$(PACKAGE)-$(VERSION)/ 
 	@chmod -R a+r,u+w,og-w $@
 	@find $@ -type d | xargs -r chmod a+rx,u+w,og-w
-
