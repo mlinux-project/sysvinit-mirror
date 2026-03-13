@@ -1,5 +1,8 @@
     * Clean up of inittab manual page by Bjarni Ingi Gislason.
     * Clean up of init manual page by Bjarni Ingi Gislason.
+    * Improved systemd to sysv unit-to-script conversion.
+      Provided by avivdaum.
+
 
 sysvinit (3.15) released; urgency=low
 
