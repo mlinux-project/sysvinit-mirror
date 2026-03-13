@@ -382,6 +382,7 @@ fi")
   need_do_start=$need_do_start$need_install
 
   execstop=$ini_service_execstop
+  pretest=
 
   if [ "$service_type" != oneshot ]
   then
@@ -399,7 +400,8 @@ fi")
         echo "WARNING: unsupported exec prefix '$daemon_pre'" >&2
     fi
 
-    # TODO: test if already running before start (pretest="+do_status_cmd")
+    [ -n "$need_do_start" ] &&
+      pretest='-+do_status >/dev/null 2>&1 && return 1'
     [ -n "$need_do_start" -o -z "$errcheck" ] &&
       execstart="-+do_start_cmd$errcheck"
     [ -n "$dbus_wait" -a -z "$execstart" ] &&
@@ -495,6 +497,7 @@ EOF
   if [ -n "$need_do_start" ]
   then
     {
+      write_commands "$pretest"
       write_install /run "$ini_service_runtimedirectory" \
         "$ini_service_user" "$ini_service_group" \
         "$ini_service_runtimedirectorymode"

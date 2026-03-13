@@ -169,5 +169,43 @@ check_contains "unsupported timeout warns at conversion" \
 check_contains "unsupported timeout falls back to 60" \
   "__dbus_wait_i -lt 60" "$bad_out"
 
+# 7) Start pre-check should skip start-pre work if already running.
+pre_service=$tmpdir/precheck.service
+pre_out=$tmpdir/precheck.init
+pre_marker=$tmpdir/pre-marker
+started_marker=$tmpdir/started-marker
+cat > "$pre_service" <<EOF
+[Unit]
+Description=Start pre-check
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecStartPre=/usr/bin/touch $pre_marker
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$pre_service" > "$pre_out"
+check_contains "start pre-check command is generated" \
+  "do_status >/dev/null 2>&1 && return 1" "$pre_out"
+
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$pre_out"
+do_status() { return 0; }
+do_start_cmd() { touch "$started_marker"; return 0; }
+out5=$tmpdir/out5
+do_start_cmd_override > "$out5" 2>&1
+rc=$?
+check_equal "start pre-check returns already-running status" "$rc" "1"
+if [ ! -e "$pre_marker" ] && [ ! -e "$started_marker" ]
+then
+  pass_case "start pre-check skips start-pre and start command"
+else
+  fail_case "start pre-check skips start-pre and start command"
+fi
+unset -f do_start_cmd do_status
+
 echo "SUMMARY - $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
