@@ -226,6 +226,54 @@ write_commands ()
 }
 
 
+# write a list of ExecCondition commands
+# usage: write_conditions list ok [run [runpriv]]
+# list		commands separated by newlines, with prefixes (-@:+!)
+# ok		case pattern of exit statuses that should continue startup
+# run		command line to run each command (nice, chrt, ...)
+# runpriv	command line to set privileges (runuser, ...)
+write_conditions ()
+{
+  oldifs=$IFS
+  IFS=$nl
+  ok=${2:-0}
+
+  for cmd in $1
+  do
+    pre=$(get_prefix "$cmd")
+    beg=$4
+
+    if [ -n "$pre" ]
+    then
+      [ -z "${pre%%*[+!]*}" ] && beg=
+      [ -z "${pre%%*[@:]*}" ] &&
+        echo "WARNING: unsupported exec prefix '$pre'" >&2
+    fi
+
+    printf '  %s\n' "$3$beg${cmd#$pre}"
+    [ -z "$pre" -o -n "${pre%%*-*}" ] || continue
+
+    cat <<EOF
+  __exec_condition_rc=\$?
+  case \$__exec_condition_rc in
+    $ok)
+      ;;
+    126|127|255)
+      return 2
+      ;;
+    *)
+      command -V log_progress_msg >/dev/null 2>&1 &&
+        log_progress_msg "condition not met, not starting"
+      return 0
+      ;;
+  esac
+EOF
+  done
+
+  IFS=$oldifs
+}
+
+
 # read a list of commands separated by newlines and write an override function
 # usage: write_function name [commands]
 # name		function name (start_cmd, stop_cmd, ...)
@@ -378,8 +426,43 @@ fi")
   need_install=$need_install$ini_service_logsdirectory
   need_install=$need_install$ini_service_configurationdirectory
 
-  need_do_start=$ini_service_execstartpre$ini_service_execstartpost
+  need_do_start=$ini_service_execcondition
+  need_do_start=$need_do_start$ini_service_execstartpre$ini_service_execstartpost
   need_do_start=$need_do_start$need_install
+
+  condition_ok=0
+  if [ -n "$ini_service_execcondition" ]
+  then
+    # POSIX sh cannot distinguish a signal-terminated child from an
+    # explicit 128+ exit, so only the documented shell error codes are
+    # treated as hard failures here.
+    while IFS= read -r success_list || [ -n "$success_list" ]
+    do
+      case $success_list in
+        *[![:space:]]*) ;;
+        *)
+          condition_ok=0
+          continue
+          ;;
+      esac
+
+      for status in $success_list
+      do
+        case $status in
+          ''|0|255)
+            ;;
+          *[!0-9]*)
+            echo "WARNING: unsupported SuccessExitStatus '$status'" >&2
+            ;;
+          *)
+            condition_ok=$condition_ok\|$status
+            ;;
+        esac
+      done
+    done <<EOF
+$ini_service_successexitstatus
+EOF
+  fi
 
   execstop=$ini_service_execstop
   pretest=
@@ -513,6 +596,8 @@ EOF
       write_install /etc "$ini_service_configurationdirectory" '' '' \
         "$ini_service_configurationdirectorymode"
       write_commands "$chdir"
+      write_conditions "$ini_service_execcondition" "$condition_ok" \
+        "$run" "$runpriv"
       write_commands "$ini_service_execstartpre" "$run" "$runpriv"
       write_commands "$execstart" "$runstart" "$runprivstart"
       write_commands "$dbus_wait"
