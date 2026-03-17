@@ -1,8 +1,9 @@
 #!/bin/sh
+# shellcheck disable=SC1090,SC2034,SC2329
 set -u
 
 repo_dir=$(
-  CDPATH= cd -- "$(dirname "$0")/../.." && pwd
+  CDPATH='' cd -- "$(dirname "$0")/../.." && pwd
 )
 sysd2v=$repo_dir/contrib/sysd2v.sh
 
@@ -43,6 +44,18 @@ check_contains() {
     pass_case "$name"
   else
     fail_case "$name (missing '$needle')"
+  fi
+}
+
+check_not_contains() {
+  name=$1
+  needle=$2
+  haystack_file=$3
+  if grep -Fq "$needle" "$haystack_file"
+  then
+    fail_case "$name (unexpected '$needle')"
+  else
+    pass_case "$name"
   fi
 }
 
@@ -605,6 +618,292 @@ check_missing "ExecCondition skip prevents later conditions" "$condition_multi_l
 check_missing "ExecCondition skip prevents start-pre" "$condition_multi_pre"
 check_missing "ExecCondition skip prevents start command" "$condition_multi_start"
 unset -f do_start_cmd
+
+# 19) Empty ExecStartPre assignment should reset prior values.
+reset_start_pre_service=$tmpdir/reset-start-pre.service
+reset_start_pre_out=$tmpdir/reset-start-pre.init
+reset_start_pre_old=$tmpdir/reset-start-pre-old
+reset_start_pre_new=$tmpdir/reset-start-pre-new
+reset_start_pre_start=$tmpdir/reset-start-pre-start
+cat > "$reset_start_pre_service" <<EOF
+[Unit]
+Description=ExecStartPre reset
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/touch $reset_start_pre_old
+ExecStartPre=
+ExecStartPre=/usr/bin/touch $reset_start_pre_new
+ExecStart=/bin/true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_start_pre_service" > "$reset_start_pre_out"
+check_not_contains "ExecStartPre reset removes old command from generation" \
+  "/usr/bin/touch $reset_start_pre_old" "$reset_start_pre_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_start_pre_out"
+do_start_cmd() { touch "$reset_start_pre_start"; return 0; }
+out20=$tmpdir/out20
+do_start_cmd_override > "$out20" 2>&1
+rc=$?
+check_equal "ExecStartPre reset returns success" "$rc" "0"
+check_missing "ExecStartPre reset skips old pre command" "$reset_start_pre_old"
+check_exists "ExecStartPre reset runs replacement pre command" "$reset_start_pre_new"
+check_exists "ExecStartPre reset still runs start command" "$reset_start_pre_start"
+unset -f do_start_cmd
+
+# 20) Empty ExecStartPost assignment should reset prior values.
+reset_start_post_service=$tmpdir/reset-start-post.service
+reset_start_post_out=$tmpdir/reset-start-post.init
+reset_start_post_old=$tmpdir/reset-start-post-old
+reset_start_post_new=$tmpdir/reset-start-post-new
+reset_start_post_start=$tmpdir/reset-start-post-start
+cat > "$reset_start_post_service" <<EOF
+[Unit]
+Description=ExecStartPost reset
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecStartPost=/usr/bin/touch $reset_start_post_old
+ExecStartPost=
+ExecStartPost=/usr/bin/touch $reset_start_post_new
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_start_post_service" > "$reset_start_post_out"
+check_not_contains "ExecStartPost reset removes old command from generation" \
+  "/usr/bin/touch $reset_start_post_old" "$reset_start_post_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_start_post_out"
+do_start_cmd() { touch "$reset_start_post_start"; return 0; }
+out21=$tmpdir/out21
+do_start_cmd_override > "$out21" 2>&1
+rc=$?
+check_equal "ExecStartPost reset returns success" "$rc" "0"
+check_missing "ExecStartPost reset skips old post command" "$reset_start_post_old"
+check_exists "ExecStartPost reset runs replacement post command" "$reset_start_post_new"
+check_exists "ExecStartPost reset still runs start command" "$reset_start_post_start"
+unset -f do_start_cmd
+
+# 21) Empty ExecStart assignment should reset prior values for oneshot units.
+reset_start_service=$tmpdir/reset-start.service
+reset_start_out=$tmpdir/reset-start.init
+reset_start_old=$tmpdir/reset-start-old
+reset_start_new=$tmpdir/reset-start-new
+cat > "$reset_start_service" <<EOF
+[Unit]
+Description=ExecStart reset
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/touch $reset_start_old
+ExecStart=
+ExecStart=/usr/bin/touch $reset_start_new
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_start_service" > "$reset_start_out"
+check_not_contains "ExecStart reset removes old command from generation" \
+  "/usr/bin/touch $reset_start_old" "$reset_start_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_start_out"
+out22=$tmpdir/out22
+do_start_cmd_override > "$out22" 2>&1
+rc=$?
+check_equal "ExecStart reset returns success" "$rc" "0"
+check_missing "ExecStart reset skips old start command" "$reset_start_old"
+check_exists "ExecStart reset runs replacement start command" "$reset_start_new"
+
+# 22) Empty ExecCondition assignment should reset prior values.
+reset_condition_service=$tmpdir/reset-condition.service
+reset_condition_out=$tmpdir/reset-condition.init
+reset_condition_marker=$tmpdir/reset-condition-marker
+reset_condition_start=$tmpdir/reset-condition-start
+cat > "$reset_condition_service" <<EOF
+[Unit]
+Description=ExecCondition reset
+
+[Service]
+Type=simple
+ExecCondition=/bin/sh -c 'exit 1'
+ExecCondition=
+ExecCondition=/usr/bin/touch $reset_condition_marker
+ExecStart=/bin/true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_condition_service" > "$reset_condition_out"
+check_not_contains "ExecCondition reset removes old command from generation" \
+  "/bin/sh -c 'exit 1'" "$reset_condition_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_condition_out"
+do_start_cmd() { touch "$reset_condition_start"; return 0; }
+out23=$tmpdir/out23
+do_start_cmd_override > "$out23" 2>&1
+rc=$?
+check_equal "ExecCondition reset returns success" "$rc" "0"
+check_exists "ExecCondition reset runs replacement condition" "$reset_condition_marker"
+check_exists "ExecCondition reset still runs start command" "$reset_condition_start"
+unset -f do_start_cmd
+
+# 23) Empty ExecStop and ExecStopPost assignments should reset prior values.
+reset_stop_service=$tmpdir/reset-stop.service
+reset_stop_out=$tmpdir/reset-stop.init
+reset_stop_old=$tmpdir/reset-stop-old
+reset_stop_new=$tmpdir/reset-stop-new
+reset_stop_post_old=$tmpdir/reset-stop-post-old
+reset_stop_post_new=$tmpdir/reset-stop-post-new
+reset_stop_kill=$tmpdir/reset-stop-kill
+cat > "$reset_stop_service" <<EOF
+[Unit]
+Description=ExecStop reset
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecStop=/usr/bin/touch $reset_stop_old
+ExecStop=
+ExecStop=/usr/bin/touch $reset_stop_new
+ExecStopPost=/usr/bin/touch $reset_stop_post_old
+ExecStopPost=
+ExecStopPost=/usr/bin/touch $reset_stop_post_new
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_stop_service" > "$reset_stop_out"
+check_not_contains "ExecStop reset removes old stop command from generation" \
+  "/usr/bin/touch $reset_stop_old" "$reset_stop_out"
+check_not_contains "ExecStopPost reset removes old stop-post command from generation" \
+  "/usr/bin/touch $reset_stop_post_old" "$reset_stop_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_stop_out"
+do_stop_cmd() { touch "$reset_stop_kill"; return 0; }
+out24=$tmpdir/out24
+do_stop_cmd_override > "$out24" 2>&1
+rc=$?
+check_equal "ExecStop reset returns success" "$rc" "0"
+check_missing "ExecStop reset skips old stop command" "$reset_stop_old"
+check_exists "ExecStop reset runs replacement stop command" "$reset_stop_new"
+check_exists "ExecStop reset still runs fallback stop command" "$reset_stop_kill"
+check_missing "ExecStopPost reset skips old stop-post command" "$reset_stop_post_old"
+check_exists "ExecStopPost reset runs replacement stop-post command" "$reset_stop_post_new"
+unset -f do_stop_cmd
+
+# 24) Empty ExecReload assignment should reset prior values.
+reset_reload_service=$tmpdir/reset-reload.service
+reset_reload_out=$tmpdir/reset-reload.init
+reset_reload_old=$tmpdir/reset-reload-old
+reset_reload_new=$tmpdir/reset-reload-new
+cat > "$reset_reload_service" <<EOF
+[Unit]
+Description=ExecReload reset
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecReload=/usr/bin/touch $reset_reload_old
+ExecReload=
+ExecReload=/usr/bin/touch $reset_reload_new
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$reset_reload_service" > "$reset_reload_out"
+check_not_contains "ExecReload reset removes old command from generation" \
+  "/usr/bin/touch $reset_reload_old" "$reset_reload_out"
+INIT_D_SCRIPT_SOURCED=true
+# shellcheck disable=SC1090
+. "$reset_reload_out"
+out25=$tmpdir/out25
+do_reload_cmd_override > "$out25" 2>&1
+rc=$?
+check_equal "ExecReload reset returns success" "$rc" "0"
+check_missing "ExecReload reset skips old reload command" "$reset_reload_old"
+check_exists "ExecReload reset runs replacement reload command" "$reset_reload_new"
+
+# 25) Empty ExecReload assignment should clear reload handling entirely.
+clear_reload_service=$tmpdir/clear-reload.service
+clear_reload_out=$tmpdir/clear-reload.init
+cat > "$clear_reload_service" <<'EOF'
+[Unit]
+Description=ExecReload clear
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecReload=/bin/echo one
+ExecReload=
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$clear_reload_service" > "$clear_reload_out"
+check_not_contains "ExecReload clear removes old reload command from generation" \
+  "/bin/echo one" "$clear_reload_out"
+check_not_contains "ExecReload clear omits reload override" \
+  "do_reload_cmd_override" "$clear_reload_out"
+check_not_contains "ExecReload clear omits reload alias" \
+  "alias do_reload=do_reload_sigusr1" "$clear_reload_out"
+
+# 26) ExecReload alias detection should happen after reset normalization.
+alias_reload_service=$tmpdir/alias-reload.service
+alias_reload_out=$tmpdir/alias-reload.init
+cat > "$alias_reload_service" <<'EOF'
+[Unit]
+Description=ExecReload alias reset
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+ExecReload=/bin/echo one
+ExecReload=
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$alias_reload_service" > "$alias_reload_out"
+check_not_contains "ExecReload alias reset removes old reload command from generation" \
+  "/bin/echo one" "$alias_reload_out"
+check_contains "ExecReload alias reset uses reload alias" \
+  "alias do_reload=do_reload_sigusr1" "$alias_reload_out"
+check_not_contains "ExecReload alias reset omits reload override" \
+  "do_reload_cmd_override" "$alias_reload_out"
+
+# 27) Empty ExecStart assignment should clear stale daemon metadata.
+clear_start_service=$tmpdir/clear-start.service
+clear_start_out=$tmpdir/clear-start.init
+cat > "$clear_start_service" <<'EOF'
+[Unit]
+Description=ExecStart clear
+
+[Service]
+Type=simple
+ExecStart=/bin/echo old
+ExecStart=
+
+[Install]
+WantedBy=multi-user.target
+EOF
+"$sysd2v" "$clear_start_service" > "$clear_start_out"
+check_not_contains "ExecStart clear removes old daemon path from generation" \
+  "DAEMON=/bin/echo" "$clear_start_out"
+check_not_contains "ExecStart clear removes old daemon args from generation" \
+  "DAEMON_ARGS=\"old" "$clear_start_out"
+check_not_contains "ExecStart clear removes old start command from generation" \
+  "/bin/echo old" "$clear_start_out"
 
 echo "SUMMARY - $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
