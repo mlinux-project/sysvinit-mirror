@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2154
 # sysd2v v0.3  --  systemd unit to sysvinit script converter
 # Copyright (C) 2019  Trek http://www.trek.eu.org/devel/sysd2v
 # distributed under the terms of the GNU General Public License 3
@@ -56,12 +57,71 @@ read_unit()
         echo "${section}_$key" |
         tr '[:upper:]' '[:lower:]'
       )
-      eval ini_$var=\$val
+      eval "ini_$var=\$val"
       [ -n "$debug" ] && echo "ini_$var=$val" >&2
     done
   done
 
   IFS=$oldifs
+}
+
+
+# normalize a repeated command-list value from read_unit()
+# usage: normalize_exec_list value section key
+normalize_exec_list ()
+{
+  lst=
+  section=$2
+  key=$3
+
+  while IFS= read -r cmd || [ -n "$cmd" ]
+  do
+    case $cmd in
+      '')
+        lst=
+        ;;
+      *)
+        lst=${lst:+$lst$nl}$cmd
+        ;;
+    esac
+  done <<EOF
+$1
+EOF
+
+  # Command substitution strips trailing newlines, so a final empty
+  # assignment has to be recovered from the parsed unit text.
+  in_section=
+  saw_key=
+  last_cmd=
+  while IFS= read -r cmd || [ -n "$cmd" ]
+  do
+    case $cmd in
+      "[$section]")
+        in_section=1
+        continue
+        ;;
+      '['*)
+        [ -n "$in_section" ] && break
+        continue
+        ;;
+    esac
+
+    [ -n "$in_section" ] || continue
+
+    case $cmd in
+      "$key"=*|"$key"[[:space:]]*=*)
+        saw_key=1
+        last_cmd=$(printf '%s\n' "$cmd" |
+          sed -n 's/^'"$key"'[[:space:]]*=[[:space:]]*\(.*\)/\1/p')
+        ;;
+    esac
+  done <<EOF
+$unit
+EOF
+
+  [ -n "$saw_key" ] && [ -z "$last_cmd" ] && lst=
+
+  printf %s "$lst"
 }
 
 
@@ -119,7 +179,7 @@ get_depends ()
     esac
 
     ign=${2:+$2 }$lst
-    [ -z "$ign" -o -n "${ign%%*"$d"*}" ] &&
+    { [ -z "$ign" ] || [ -n "${ign%%*"$d"*}" ]; } &&
       lst=${lst:+$lst }$d
   done
 
@@ -152,9 +212,10 @@ write_env ()
     pre=$(get_prefix "$env")
     noerr=
 
-    [ -n "$pre" -a -z "${pre%%*-*}" ] && noerr="[ -r ${env#$pre} ] && "
+    [ -n "$pre" ] && [ -z "${pre%%*-*}" ] &&
+      noerr="[ -r ${env#"$pre"} ] && "
 
-    printf '%s\n' "$noerr. ${env#$pre}"
+    printf '%s\n' "$noerr. ${env#"$pre"}"
   done
 
   IFS=$oldifs
@@ -174,7 +235,7 @@ write_path ()
     lst=${lst:+$lst:}$2/$dir
   done
 
-  [ -z "$3" ] || printf '%s=%s\n' $1 $lst
+  [ -z "$3" ] || printf '%s=%s\n' "$1" "$lst"
 }
 
 
@@ -219,7 +280,7 @@ write_commands ()
         echo "WARNING: unsupported exec prefix '$pre'" >&2
     fi
 
-    printf '  %s\n' "$2$beg${cmd#$pre}$end"
+    printf '  %s\n' "$2$beg${cmd#"$pre"}$end"
   done
 
   IFS=$oldifs
@@ -250,8 +311,8 @@ write_conditions ()
         echo "WARNING: unsupported exec prefix '$pre'" >&2
     fi
 
-    printf '  %s\n' "$3$beg${cmd#$pre}"
-    [ -z "$pre" -o -n "${pre%%*-*}" ] || continue
+    printf '  %s\n' "$3$beg${cmd#"$pre"}"
+    { [ -z "$pre" ] || [ -n "${pre%%*-*}" ]; } || continue
 
     cat <<EOF
   __exec_condition_rc=\$?
@@ -283,10 +344,11 @@ write_function ()
   lst=${2-$(cat)}
 
   [ -n "$lst" ] || return
-  [ "$lst" = : ] && printf "do_${1}_override () :\n\n" && return
+  [ "$lst" = : ] && printf 'do_%s_override () :\n\n' "$1" && return
 
   end='  true\n'
-  [ -z "${lst%%*|| return [0-9]}" -o -z "${lst%%*|| return \$?}" ] && end=
+  { [ -z "${lst%%*|| return [0-9]}" ] ||
+    [ -z "${lst%%*|| return \$?}" ]; } && end=
   printf "do_${1}_override ()\n{\n%s\n$end}\n\n" "$lst"
 }
 
@@ -300,13 +362,21 @@ write_init ()
   name=$1
   instance=$2
 
+  norm_execstart=$(normalize_exec_list "$ini_service_execstart" Service ExecStart)
+  norm_execcondition=$(normalize_exec_list "$ini_service_execcondition" Service ExecCondition)
+  norm_execstartpre=$(normalize_exec_list "$ini_service_execstartpre" Service ExecStartPre)
+  norm_execstartpost=$(normalize_exec_list "$ini_service_execstartpost" Service ExecStartPost)
+  norm_execstop=$(normalize_exec_list "$ini_service_execstop" Service ExecStop)
+  norm_execstoppost=$(normalize_exec_list "$ini_service_execstoppost" Service ExecStopPost)
+  norm_execreload=$(normalize_exec_list "$ini_service_execreload" Service ExecReload)
+
   if [ "${name%@}" != "$name" ]
   then
     name=$name$instance
   fi
 
-  daemon_pre=$(get_prefix "$ini_service_execstart")
-  daemon=${ini_service_execstart#$daemon_pre}
+  daemon_pre=$(get_prefix "$norm_execstart")
+  daemon=${norm_execstart#"$daemon_pre"}
 
   if [ "${daemon%%[[:space:]]*}" != "$daemon" ]
   then
@@ -319,7 +389,7 @@ write_init ()
   if [ -n "$ini_service_user" ]
   then
     start_args="--user $ini_service_user"
-    [ -n "$daemon_pre" -a -z "${daemon_pre%%*[+!]*}" ] ||
+    [ -n "$daemon_pre" ] && [ -z "${daemon_pre%%*[+!]*}" ] ||
       start_args="$start_args --chuid $ini_service_user"
     stop_args="--user $ini_service_user"
     runprivstart="runuser -u $ini_service_user -- "
@@ -343,7 +413,7 @@ write_init ()
     run="${run}nice -n $ini_service_nice "
 
   pre=$(get_prefix "$ini_service_workingdirectory")
-  workdir=${ini_service_workingdirectory#$pre}
+  workdir=${ini_service_workingdirectory#"$pre"}
   [ "$workdir" = '~' ] && workdir=\~$ini_service_user
   [ -n "$workdir" ] &&
     start_args="$start_args --chdir $workdir" &&
@@ -354,7 +424,7 @@ write_init ()
     if [ -n "$ini_service_busname" ]
     then
       service_type=dbus
-    elif [ -n "$ini_service_execstart" ]
+    elif [ -n "$norm_execstart" ]
     then
       service_type=simple
     else
@@ -365,7 +435,7 @@ write_init ()
   if [ "$service_type" != forking ]
   then
     start_args="$start_args --background"
-    [ -z "$pidfile" -a "$ini_service_killmode" != none ] &&
+    [ -z "$pidfile" ] && [ "$ini_service_killmode" != none ] &&
       start_args="$start_args --make-pidfile" &&
       pidfile="/var/run/$name-sysd2v.pid"
   fi
@@ -378,7 +448,7 @@ write_init ()
     timeout=${timeout%s}
     [ -n "${timeout#60}" ] &&
       start_args="$start_args --notify-timeout $timeout"
-    [ -n "$timeout" -a -z "${timeout%%*[^0-9]*}" ] &&
+    [ -n "$timeout" ] && [ -z "${timeout%%*[^0-9]*}" ] &&
       echo "WARNING: unsupported timeout '$timeout'" >&2
   elif [ "$service_type" = dbus ]
   then
@@ -414,7 +484,7 @@ fi")
   signal=${ini_service_killsignal#SIG}
   timeout=${ini_service_timeoutstopsec:-$ini_service_timeoutsec}
   timeout=${timeout%s}
-  [ -n "${signal#TERM}" -o -n "${timeout#90}" ] &&
+  { [ -n "${signal#TERM}" ] || [ -n "${timeout#90}" ]; } &&
     stop_args="$stop_args --retry=${signal:-TERM}/${timeout:-90}/KILL/5"
 
   limitnofile=$ini_service_limitnofile
@@ -426,12 +496,12 @@ fi")
   need_install=$need_install$ini_service_logsdirectory
   need_install=$need_install$ini_service_configurationdirectory
 
-  need_do_start=$ini_service_execcondition
-  need_do_start=$need_do_start$ini_service_execstartpre$ini_service_execstartpost
+  need_do_start=$norm_execcondition
+  need_do_start=$need_do_start$norm_execstartpre$norm_execstartpost
   need_do_start=$need_do_start$need_install
 
   condition_ok=0
-  if [ -n "$ini_service_execcondition" ]
+  if [ -n "$norm_execcondition" ]
   then
     # POSIX sh cannot distinguish a signal-terminated child from an
     # explicit 128+ exit, so only the documented shell error codes are
@@ -464,7 +534,7 @@ $ini_service_successexitstatus
 EOF
   fi
 
-  execstop=$ini_service_execstop
+  execstop=$norm_execstop
   pretest=
 
   if [ "$service_type" != oneshot ]
@@ -472,7 +542,7 @@ EOF
     [ "$pidfile" = "/var/run/${daemon##*/}.pid" ] && unset pidfile
     [ "$name" = "${daemon##*/}" ] && unset name
 
-    [ -n "$daemon_args" -a -z "${daemon_args%%*[\"\\]*}" ] &&
+    [ -n "$daemon_args" ] && [ -z "${daemon_args%%*[\"\\]*}" ] &&
       echo "WARNING: DAEMON_ARGS needs to be escaped" >&2
     errcheck=' || return $?'
 
@@ -485,25 +555,25 @@ EOF
 
     [ -n "$need_do_start" ] &&
       pretest='-+do_status >/dev/null 2>&1 && return 1'
-    [ -n "$need_do_start" -o -z "$errcheck" ] &&
+    { [ -n "$need_do_start" ] || [ -z "$errcheck" ]; } &&
       execstart="-+do_start_cmd$errcheck"
-    [ -n "$dbus_wait" -a -z "$execstart" ] &&
+    [ -n "$dbus_wait" ] && [ -z "$execstart" ] &&
       execstart="-+do_start_cmd$errcheck"
 
     errcheck=' || return $?'
     [ -n "$execstop" ] && errcheck=
-    [ -n "$execstop$ini_service_execstoppost" -a \
-      "$ini_service_killmode" != none ] &&
+    [ -n "$execstop$norm_execstoppost" ] &&
+      [ "$ini_service_killmode" != none ] &&
       killstop="-do_stop_cmd$errcheck"
 
-    [ -n "$timeout" -a -z "${timeout%%*[^0-9]*}" ] &&
+    [ -n "$timeout" ] && [ -z "${timeout%%*[^0-9]*}" ] &&
       echo "WARNING: unsupported timeout '$timeout'" >&2
   else
     daemon=none
     pidfile=none
-    : ${name:=SERVICE_NAME}
+    : "${name:=SERVICE_NAME}"
     unset daemon_args start_args stop_args
-    execstart=$ini_service_execstart
+    execstart=$norm_execstart
     runstart=$run
   fi
 
@@ -522,8 +592,8 @@ EOF
 
   default_start=$(get_runlevel "$req_start $should_start")
   [ "$default_start" = S ] && default_stop='0 6' || default_stop='0 1 6'
-  [ -z "$execstop$ini_service_execstoppost" ] &&
-    [ "$service_type" = oneshot -o "$ini_service_killmode" = none ] &&
+  [ -z "$execstop$norm_execstoppost" ] &&
+    { [ "$service_type" = oneshot ] || [ "$ini_service_killmode" = none ]; } &&
     default_stop=
 
   [ "$default_start" = S ] && ignore=\$remote_fs
@@ -596,39 +666,40 @@ EOF
       write_install /etc "$ini_service_configurationdirectory" '' '' \
         "$ini_service_configurationdirectorymode"
       write_commands "$chdir"
-      write_conditions "$ini_service_execcondition" "$condition_ok" \
+      write_conditions "$norm_execcondition" "$condition_ok" \
         "$run" "$runpriv"
-      write_commands "$ini_service_execstartpre" "$run" "$runpriv"
+      write_commands "$norm_execstartpre" "$run" "$runpriv"
       write_commands "$execstart" "$runstart" "$runprivstart"
       write_commands "$dbus_wait"
-      write_commands "$ini_service_execstartpost" "$run" "$runpriv"
+      write_commands "$norm_execstartpost" "$run" "$runpriv"
     } | write_function start_cmd
   else
     [ "$service_type" = oneshot ] && write_function start :
   fi
 
-  if [ -n "$execstop$ini_service_execstoppost" ]
+  if [ -n "$execstop$norm_execstoppost" ]
   then
     {
       write_commands "$chdir"
       write_commands "$execstop" "$run" "$runpriv"
       write_commands "$killstop"
-      write_commands "$ini_service_execstoppost" "$run" "$runpriv"
+      write_commands "$norm_execstoppost" "$run" "$runpriv"
     } | write_function stop_cmd
   else
-    [ "$service_type" = oneshot -o "$ini_service_killmode" = none ] &&
+    { [ "$service_type" = oneshot ] || [ "$ini_service_killmode" = none ]; } &&
       write_function stop :
   fi
 
-  if [ "$ini_service_execreload" = '/bin/kill -HUP $MAINPID' -a \
-       -z "$run$runpriv" ]
+  reload_sigusr1="/bin/kill -HUP \$MAINPID"
+  if [ "$norm_execreload" = "$reload_sigusr1" ] &&
+     [ -z "$run$runpriv" ]
   then
     printf 'alias do_reload=do_reload_sigusr1\n\n'
-  elif [ -n "$ini_service_execreload" ]
+  elif [ -n "$norm_execreload" ]
   then
     {
       write_commands "$chdir"
-      write_commands "$ini_service_execreload" "$run" "$runpriv"
+      write_commands "$norm_execreload" "$run" "$runpriv"
     } | write_function reload_cmd
 
     cat <<"EOF"
@@ -659,8 +730,8 @@ do
     esac
 done
 
-: ${instance=INSTANCE_NAME}
-shift $(($OPTIND - 1))
+: "${instance:=INSTANCE_NAME}"
+shift $((OPTIND - 1))
 
 
 # convert unit file
