@@ -212,6 +212,14 @@ for this purpose use the following in your keymaps file:
 alt keycode 103 = KeyboardSignal
 .sp
 .RE
+
+.sp
+Note: In environments where the directory /etc/inittab.d/ exists, init will
+read the contents of this directory and open any files with the ".tab"
+extension. These .tab files can introduce additional lines and settings with the same
+format as inittab. The .tab files are optional and provide a install-specific
+method for adding extra options or functionality.
+
 .\"}}}
 .\"}}}
 .\"{{{  Examples

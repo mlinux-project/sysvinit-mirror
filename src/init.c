@@ -13,7 +13,7 @@
 Version information is not placed in the top-level Makefile by default
 */
 #ifndef VERSION
-#define VERSION "3.14"
+#define VERSION "3.16"
 #endif
 /*
  *		This file is part of the sysvinit suite,
@@ -1492,8 +1492,13 @@ void read_inittab(void)
   /*
    *  Open INITTAB.D directory 
    */
+  tabdir = opendir(INITTABD);
+  /*
+  - We don't need to log this since the inittab.d directory does not
+    exist, by default. - Jesse
   if( (tabdir = opendir(INITTABD))==NULL)
 	  initlog(L_VB, "No inittab.d directory found");
+  */
 
   while(done != 1) {
         skip_this_line = FALSE;
@@ -1550,7 +1555,6 @@ void read_inittab(void)
                                 memset(buf, '\0', sizeof(buf));
                                 file_status = fgets(buf, sizeof(buf), fp_tab);
 				while( file_status != NULL) {
-                                        printf("Got line: %s\n", buf);
 					for(p = buf; *p == ' ' || *p == '\t'; p++);
 					if (*p != '#' && *p != '\n')
 						break;
