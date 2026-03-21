@@ -152,14 +152,14 @@ void tcinit(struct console *con)
 		tio->c_cc[VMIN]     = 1;
 
 		if (ioctl(fd, TIOCGWINSZ, &ws) == 0) {
-			int set = 0;
+			/* int set = 0; */
 			if (ws.ws_row == 0) {
 				ws.ws_row = 24;
-				set++;
+				/* set++; */
 			}
 			if (ws.ws_col == 0) {
 				ws.ws_col = 80;
-				set++;
+				/* set++; */
 			}
 			(void)ioctl(fd, TIOCSWINSZ, &ws);
 		}

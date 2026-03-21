@@ -1,3 +1,4 @@
+sysvinit (3.16) released; urgency=low
     * Clean up of inittab manual page by Bjarni Ingi Gislason.
     * Clean up of init manual page by Bjarni Ingi Gislason.
     * Improved systemd to sysv unit-to-script conversion.
@@ -5,6 +6,7 @@
     * Remove some debug/status messages when reading the /etc/inittab.d/
       directory.
     * Document how init reads the inittab.d directory in the inittab manual page.
+    * Removed unused variable "set" from sulogin
 
 
 sysvinit (3.15) released; urgency=low
