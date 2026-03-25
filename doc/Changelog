@@ -1,3 +1,6 @@
+sysvinit (3.18) unreleased; urgency=low
+    * Remove unneeded test script and references to it in Makefile.
+
 sysvinit (3.17) released; urgency=low
     * Fixed changelog.
     * Remove systemd-to-shell script due to license conflict.
