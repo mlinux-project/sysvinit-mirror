@@ -1,3 +1,8 @@
+sysvinit (3.17) released; urgency=low
+    * Fixed changelog.
+    * Removed systemd-to-shell script due to license conflict.
+
+sysvinit (3.16) released; urgency=low
     * Clean up of inittab manual page by Bjarni Ingi Gislason.
     * Clean up of init manual page by Bjarni Ingi Gislason.
     * Improved systemd to sysv unit-to-script conversion.
