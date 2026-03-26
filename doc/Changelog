@@ -1,5 +1,6 @@
 sysvinit (3.18) unreleased; urgency=low
     * Remove unneeded test script and references to it in Makefile.
+    * Fix man page translation.
 
 sysvinit (3.17) released; urgency=low
     * Fixed changelog.
