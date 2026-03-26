@@ -9,7 +9,12 @@ PO4A_OPTS = --previous --srcdir po/ --destdir ./ --no-backups --stamp \
             --package-name sysvinit --package-version $(VERSION) \
             --msgid-bugs-address "Jesse <jsmith@resonatingmedia.com>"
 
-all:
+LANGS := $(patsubst po/%.po,%,$(wildcard po/*.po))
+
+$(LANGS):
+ mkdir -p $@
+
+all: $(LANGS) 
 	sed --in-place=.orig --separate 's/\@VERSION\@/$(VERSION)/g' $(MANPAGES)
 ifdef PO4A
 	po4a $(PO4A_OPTS) po/po4a.cfg
@@ -23,5 +28,6 @@ install: all
 clean distclean:
 ifdef PO4A
 	po4a $(PO4A_OPTS) --rm-translations po/po4a.cfg
+    rm -rf $(LANGS)
 endif
 	rm -f *.po sysvinit-man.pot
