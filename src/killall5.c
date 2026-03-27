@@ -399,20 +399,23 @@ int check4nfs(const char * path, char * real)
 	char buf[PATH_MAX+1];
 	const char *curr;
 	int deep = maxsymlinks();
+	char *prev_alloc = NULL;
 
 	if (!nlist) return 0;
 
 	curr = path;
 	do {
-		const char *prev;
+		char *prev;
 		int len;
 
-		if ((prev = strdupa(curr)) == NULL) {
-			nsyslog(LOG_ERR, "strdupa(): %s\n", strerror(errno));
+		prev = strdup(curr);
+		if (!prev) {
+			if (prev_alloc) free(prev_alloc);
 			return 0;
 		}
-
-		errno = 0;
+		if (prev_alloc) free(prev_alloc);
+		prev_alloc = prev;
+				
 		if ((len = readlink(curr, buf, PATH_MAX)) < 0)
 			break;
 		buf[len] = '\0';
@@ -432,7 +435,10 @@ int check4nfs(const char * path, char * real)
 		}
 		curr = &buf[0];
 
-		if (deep-- <= 0) return 0;
+		if (deep-- <= 0) { 
+				if (prev_alloc) free(prev_alloc);
+				return 0;
+		}
 
 	} while (1);
 
@@ -458,6 +464,7 @@ int check4nfs(const char * path, char * real)
 		}
 	}
 
+	if (prev_alloc) free(prev_alloc);
 	return 0;
 }
 
@@ -664,6 +671,7 @@ int readproc()
                 p->pathname = (char *)xmalloc(PATH_MAX);
                 memset(p->pathname, 0, PATH_MAX);
  		if (readlink(path, p->pathname, PATH_MAX) == -1) {
+ 			free(p->pathname);
  			p->pathname = NULL;
  		}
 
