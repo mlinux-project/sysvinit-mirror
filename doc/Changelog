@@ -1,6 +1,11 @@
-sysvinit (3.18) unreleased; urgency=low
+sysvinit (3.19) unreleased; urgency=low
+    * Fix potential memory leaks in shutdown, killall5, and init. Provided by voidzen.
+
+
+sysvinit (3.18) released; urgency=low
     * Remove unneeded test script and references to it in Makefile.
     * Fix man page translation.
+
 
 sysvinit (3.17) released; urgency=low
     * Fixed changelog.
