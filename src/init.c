@@ -1306,8 +1306,7 @@ pid_t spawn(CHILD *ch, int *res)
 		if (errno == ENOEXEC) {
   			args[1] = SHELL;
   			args[2] = "-c";
-  			strcpy(buf, "exec ");
-  			strncat(buf, proc, sizeof(buf) - strlen(buf) - 1);
+  			snprintf(buf, sizeof(buf), "exec %s", proc);
   			args[3] = buf;
   			args[4] = NULL;
 			execvp(args[1], args + 1);
@@ -1669,7 +1668,8 @@ void read_inittab(void)
 	 */
 	ch->action = actionNo;
 	strncpy(ch->id, id, sizeof(utproto.ut_id) + 1); /* Hack for different libs. */
-	strncpy(ch->process, process, PROCESS_LENGTH - 2);
+	strncpy(ch->process, process, PROCESS_LENGTH - 1);
+	ch->process[PROCESS_LENGTH - 1] = '\0';
 	if (rlevel[0]) {
 		for(f = 0; f < (int)sizeof(rlevel) - 1 && rlevel[f]; f++) {
 			ch->rlevel[f] = rlevel[f];

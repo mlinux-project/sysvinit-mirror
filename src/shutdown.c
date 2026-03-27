@@ -665,6 +665,11 @@ int main(int argc, char **argv)
 		}
 		endutent();
 
+		/* Now free the authorized users list as it's no longer needed */
+		for(i = 0; i < 32 && downusers[i]; i++) {
+				free(downusers[i]);
+		}
+
 		/* See if user was allowed. */
 		if (!user_ok) {
 			if ((fp = fopen(CONSOLE, "w")) != NULL) {
