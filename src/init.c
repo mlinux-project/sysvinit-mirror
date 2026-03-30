@@ -13,7 +13,7 @@
 Version information is not placed in the top-level Makefile by default
 */
 #ifndef VERSION
-#define VERSION "3.17"
+#define VERSION "3.19"
 #endif
 /*
  *		This file is part of the sysvinit suite,
