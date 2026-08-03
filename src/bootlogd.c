@@ -407,9 +407,11 @@ void writelog(FILE *fp, unsigned char *ptr, int len, int print_escape_characters
 
 	for (i = 0; i < len; i++) {
 		int ignore = 0;
+		const char* last_ptr;
 
 		/* prepend date to every line */
-		if (*(ptr-1) == '\n' || first_run) {
+		last_ptr = ((ptr == ringbuf) ? endptr : ptr)-1;
+		if (*last_ptr == '\n' || first_run) {
 			time_t t;
 			char *s;
 			time(&t);
