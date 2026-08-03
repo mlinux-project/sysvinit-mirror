@@ -1,5 +1,6 @@
 sysvinit (3.19) unreleased; urgency=low
     * Fix potential memory leaks in shutdown, killall5, and init. Provided by voidzen.
+    * Prevent out of bounds memory read in bootlogd.
 
 
 sysvinit (3.18) released; urgency=low
